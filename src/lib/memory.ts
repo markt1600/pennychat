@@ -50,7 +50,7 @@ ${prior?.summary ?? "(empty — this was the first conversation)"}
 Transcript of the conversation that just ended:
 ${transcript}
 
-Rewrite the memory file. Rules: at most 130 words; plain factual sentences; keep durable facts about ${personName} (school, friends, family, hobbies, likes and dislikes, plans, ongoing situations) and anything worth asking about next time; merge with the existing facts — newest information wins on conflict; drop greetings and small talk; never include the agent's own remarks or the word "agent". Output ONLY the memory file text.`,
+Rewrite the memory file. Rules: at most 130 words; plain factual sentences; keep durable facts about ${personName} (school, friends, family, hobbies, likes and dislikes, plans, ongoing situations) and anything worth asking about next time; ${personName}'s messages starting with "[PHOTO]" describe photos ${personName} shared — keep durable facts from them (pets, people, places, things ${personName} made); merge with the existing facts — newest information wins on conflict; drop greetings and small talk; never include the agent's own remarks or the word "agent". Output ONLY the memory file text.`,
         },
       ],
     });

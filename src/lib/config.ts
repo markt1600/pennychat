@@ -1,9 +1,9 @@
 // Centralized environment configuration with sane defaults.
 
 export const config = {
-  /** Who this app belongs to — one person, one memory. */
+  /** Who this app belongs to — one person, one memory. Penny's app. */
   user: {
-    name: process.env.USER_NAME || "Penny",
+    name: "Penny",
     /** Default chat language (en, zh, ja, th, vi, de, ko, fr). */
     language: process.env.CHAT_LANGUAGE || "en",
   },

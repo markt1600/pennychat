@@ -6,9 +6,9 @@ A personal voice companion in the browser — an over-the-top gen-alpha
 bestie remembers every chat and picks up where you left off. Talk to her
 hands-free, push-to-talk, or by typing — and send her photos to react to.
 
-Set `USER_NAME` to your daughter's name; the persona lives in
-`chatPrompt()` (`src/app/api/chat/token/route.ts`), and its dashboard
-fallback copy is in `DASHBOARD_PROMPT.md` — keep them in sync.
+The app is hard-coded for Penny; the persona lives in `chatPrompt()`
+(`src/app/api/chat/token/route.ts`), and its dashboard fallback copy is
+in `DASHBOARD_PROMPT.md` — keep them in sync.
 
 Extracted from the Live Chat feature of the Agentic Concierge app
 (`markt1600/callagent`). **Read `HANDOFF.md` before changing anything** — it
@@ -30,7 +30,6 @@ memory design) this app is built on.
 | `ELEVENLABS_FAST_LLM` | no | Per-session LLM override, e.g. `claude-haiku-4-5` (agent must allow the LLM override) |
 | `ANTHROPIC_API_KEY` | yes | Memory rewrites after each chat + photo descriptions |
 | `FAST_MODEL` | no | Model for memory rewrites and photo vision (default `claude-haiku-4-5`) |
-| `USER_NAME` | no | Who this app belongs to — your daughter's name (default `Penny`) |
 | `CHAT_LANGUAGE` | no | Default language: en, zh, ja, th, vi, de, ko, fr (default `en`) |
 | `ACCESS_CODE` | recommended | Shared code the chat page asks for once — keeps strangers out of a public URL (and out of the memory file) |
 | `KV_REST_API_URL` + `KV_REST_API_TOKEN` | prod | Upstash/Vercel KV for the memory file (dev falls back to `.data/store.json`) |

@@ -326,9 +326,9 @@ export default function ChatPage() {
                     <textarea
                       value={memoryDraft}
                       onChange={(e) => setMemoryDraft(e.target.value)}
-                      rows={7}
-                      maxLength={1500}
-                      placeholder={`Plain facts your bestie should know, e.g. "${name} is 12 and loves…" (about 130 words)`}
+                      rows={10}
+                      maxLength={4000}
+                      placeholder={`Plain facts your bestie should know, e.g. "${name} is 12 and loves…" (about 300 words)`}
                       style={{ fontSize: "0.9rem" }}
                     />
                     <div className="row">

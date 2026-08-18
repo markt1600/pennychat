@@ -19,7 +19,7 @@ has the env-var table and setup steps.
 - Keep API keys server-side only; the browser only ever gets short-lived
   conversation tokens.
 - Keep the session prompt lean — prompt size is latency (see HANDOFF §2).
-- The memory file stays bounded (~130 words); never switch to replaying
+- The memory file stays bounded (~300 words); never switch to replaying
   transcripts into the prompt.
 - Every dynamic variable referenced by the agent's dashboard prompt must
   be sent on every session, or session initiation fails.

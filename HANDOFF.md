@@ -118,6 +118,10 @@ go read `src/lib/memory.ts` and `/api/chat/token` in callagent first.
   it, anyone who finds the URL chats into the memory file. Set it in
   production. It's a shared code, not real auth — fine for one household,
   not for a multi-user product (callagent uses Google Sign-In for that).
+- **`ADMIN_CODE`** is the parent tier: entered at the same gate, it also
+  passes `checkAccess`, but only it satisfies `isAdmin` — which gates the
+  memory routes and `/api/conversations` (per-chat summaries). With no
+  codes configured at all (local dev) everything is open, including admin.
 - The Anthropic call checks `stop_reason === "refusal"` and skips the
   memory update rather than storing an error message as "memory".
 

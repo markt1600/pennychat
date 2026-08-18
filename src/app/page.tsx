@@ -6,11 +6,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Conversation, type Language } from "@elevenlabs/client";
-import { type PersonMemory } from "@/lib/types";
+import { type ConversationSummary, type PersonMemory } from "@/lib/types";
 
 interface Status {
   userName: string;
   accessRequired: boolean;
+  admin?: boolean;
 }
 
 type Turn = { role: "you" | "agent"; text: string; imageUrl?: string };
@@ -56,6 +57,8 @@ export default function ChatPage() {
   const [showMemory, setShowMemory] = useState(false);
   const [editingMemory, setEditingMemory] = useState(false);
   const [memoryDraft, setMemoryDraft] = useState("");
+  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const [showLog, setShowLog] = useState(false);
   const convo = useRef<Conversation | null>(null);
   const photoInput = useRef<HTMLInputElement | null>(null);
   const transcriptEnd = useRef<HTMLDivElement | null>(null);
@@ -65,15 +68,22 @@ export default function ChatPage() {
     return code ? { "x-access-code": code } : {};
   }, []);
 
+  // The status call also tells us whether the stored code is the admin
+  // (parent) code — that flag gates the memory and conversation-log views.
+  const refreshStatus = useCallback(async () => {
+    try {
+      const r = await fetch("/api/status", { headers: authHeaders() });
+      const s: Status = await r.json();
+      setStatus(s);
+      if (!s.accessRequired || localStorage.getItem(ACCESS_KEY)) setUnlocked(true);
+    } catch {
+      setUnlocked(true);
+    }
+  }, [authHeaders]);
+
   useEffect(() => {
-    fetch("/api/status")
-      .then((r) => r.json())
-      .then((s: Status) => {
-        setStatus(s);
-        if (!s.accessRequired || localStorage.getItem(ACCESS_KEY)) setUnlocked(true);
-      })
-      .catch(() => setUnlocked(true));
-  }, []);
+    refreshStatus();
+  }, [refreshStatus]);
 
   const loadMemory = useCallback(async () => {
     try {
@@ -85,9 +95,24 @@ export default function ChatPage() {
     }
   }, [authHeaders]);
 
+  const loadConversations = useCallback(async () => {
+    try {
+      const res = await fetch("/api/conversations", { headers: authHeaders() });
+      const data = await res.json();
+      if (res.ok) setConversations(data.conversations ?? []);
+    } catch {
+      /* transient */
+    }
+  }, [authHeaders]);
+
+  const admin = Boolean(status?.admin);
+
   useEffect(() => {
-    if (unlocked) loadMemory();
-  }, [unlocked, loadMemory]);
+    if (unlocked && admin) {
+      loadMemory();
+      loadConversations();
+    }
+  }, [unlocked, admin, loadMemory, loadConversations]);
 
   // Keep the newest turn in view.
   useEffect(() => {
@@ -107,6 +132,8 @@ export default function ChatPage() {
     localStorage.setItem(ACCESS_KEY, accessCode.trim());
     setAccessCode("");
     setUnlocked(true);
+    // Re-check with the new code — it may be the admin (parent) code.
+    refreshStatus();
   }
 
   const begin = useCallback(async () => {
@@ -186,8 +213,13 @@ export default function ChatPage() {
     convo.current = null;
     setPhase("ended");
     setSpeaking(false);
-    // The webhook rewrites memory shortly after the chat ends.
-    setTimeout(loadMemory, 8000);
+    // The webhook rewrites memory + logs a summary shortly after the chat.
+    if (admin) {
+      setTimeout(() => {
+        loadMemory();
+        loadConversations();
+      }, 8000);
+    }
   }
 
   function toggleMute() {
@@ -236,6 +268,25 @@ export default function ChatPage() {
     await fetch("/api/memory", { method: "DELETE", headers: authHeaders() });
     setMemory(null);
     setShowMemory(false);
+  }
+
+  // Forget the stored code and return to the gate (ends any live chat).
+  async function signOut() {
+    await convo.current?.endSession().catch(() => {});
+    convo.current = null;
+    localStorage.removeItem(ACCESS_KEY);
+    setUnlocked(false);
+    setPhase("idle");
+    setTurns([]);
+    setSpeaking(false);
+    setMuted(false);
+    setError(null);
+    setMemory(null);
+    setConversations([]);
+    setShowMemory(false);
+    setShowLog(false);
+    setEditingMemory(false);
+    setStatus((s) => (s ? { ...s, admin: false } : s));
   }
 
   function startEditMemory() {
@@ -307,6 +358,7 @@ export default function ChatPage() {
           <button onClick={begin}>💬 Start chatting</button>
           {error && <p className="error">{error}</p>}
 
+          {admin && (
           <div style={{ marginTop: "1.2rem" }}>
             <p className="sub" style={{ marginBottom: "0.3rem" }}>
               <a
@@ -376,7 +428,43 @@ export default function ChatPage() {
                 )}
               </div>
             )}
+
+            {conversations.length > 0 && (
+              <p className="sub" style={{ margin: "0.6rem 0 0.3rem" }}>
+                <a
+                  className="admin-link"
+                  onClick={() => setShowLog((v) => !v)}
+                  style={{ cursor: "pointer" }}
+                >
+                  {showLog ? "Hide" : "Show"} conversation summaries ({conversations.length}) →
+                </a>
+              </p>
+            )}
+            {showLog &&
+              conversations.map((c) => (
+                <div key={c.id} className="res-item" style={{ cursor: "default" }}>
+                  <div className="meta" style={{ marginBottom: "0.25rem" }}>
+                    {new Date(c.at).toLocaleString(undefined, {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    })}{" "}
+                    · {c.turnCount} turns
+                  </div>
+                  <p style={{ margin: 0, fontSize: "0.85rem", whiteSpace: "pre-wrap" }}>
+                    {c.summary}
+                  </p>
+                </div>
+              ))}
           </div>
+          )}
+
+          {status?.accessRequired && (
+            <p className="sub" style={{ margin: "1rem 0 0" }}>
+              <a className="admin-link" onClick={signOut} style={{ cursor: "pointer" }}>
+                Sign out
+              </a>
+            </p>
+          )}
         </div>
       ) : (
         <div className="panel">
@@ -479,6 +567,13 @@ export default function ChatPage() {
             </button>
           </div>
           {error && <p className="error">{error}</p>}
+          {status?.accessRequired && (
+            <p className="sub" style={{ margin: "0.8rem 0 0" }}>
+              <a className="admin-link" onClick={signOut} style={{ cursor: "pointer" }}>
+                Sign out
+              </a>
+            </p>
+          )}
         </div>
       )}
     </main>

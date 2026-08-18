@@ -6,6 +6,7 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { config } from "@/lib/config";
+import { logConversation } from "@/lib/conversations";
 import { updateMemoryFromConversation } from "@/lib/memory";
 
 export const runtime = "nodejs";
@@ -40,6 +41,7 @@ export async function POST(request: NextRequest) {
   const payload = JSON.parse(rawBody) as {
     type?: string;
     data?: {
+      conversation_id?: string;
       transcript?: Array<{ role: string; message?: string | null }>;
       conversation_initiation_client_data?: {
         dynamic_variables?: Record<string, string>;
@@ -63,5 +65,7 @@ export async function POST(request: NextRequest) {
       text: t.message!,
     }));
   await updateMemoryFromConversation(turns);
+  // Parent view: also log a compact summary of the chat (never throws).
+  await logConversation(payload.data.conversation_id ?? "", turns);
   return NextResponse.json({ ok: true });
 }

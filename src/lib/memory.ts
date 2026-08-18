@@ -22,6 +22,23 @@ export async function eraseMemory(): Promise<void> {
 }
 
 /**
+ * Directly set the memory file text — used to seed the memory before the
+ * first chat (or correct it) via the UI. Post-chat rewrites then keep
+ * folding new conversations into whatever is written here.
+ */
+export async function saveMemorySummary(summary: string): Promise<PersonMemory> {
+  const prior = await loadMemory();
+  const memory: PersonMemory = {
+    summary: summary.trim().slice(0, MAX_SUMMARY_CHARS),
+    personName: config.user.name,
+    conversationCount: prior?.conversationCount ?? 0,
+    lastConversationAt: prior?.lastConversationAt ?? new Date().toISOString(),
+  };
+  await setJSON(MEMORY_KEY, memory);
+  return memory;
+}
+
+/**
  * Fold a finished chat into the memory file. Runs post-chat (webhook time),
  * so it costs nothing during the conversation. Never throws — a failed
  * update just means the agent remembers a little less.

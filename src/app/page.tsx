@@ -54,6 +54,8 @@ export default function ChatPage() {
   const [error, setError] = useState<string | null>(null);
   const [memory, setMemory] = useState<PersonMemory | null>(null);
   const [showMemory, setShowMemory] = useState(false);
+  const [editingMemory, setEditingMemory] = useState(false);
+  const [memoryDraft, setMemoryDraft] = useState("");
   const convo = useRef<Conversation | null>(null);
   const photoInput = useRef<HTMLInputElement | null>(null);
   const transcriptEnd = useRef<HTMLDivElement | null>(null);
@@ -233,6 +235,33 @@ export default function ChatPage() {
     if (!window.confirm("Erase everything your bestie remembers? This cannot be undone.")) return;
     await fetch("/api/memory", { method: "DELETE", headers: authHeaders() });
     setMemory(null);
+    setShowMemory(false);
+  }
+
+  function startEditMemory() {
+    setMemoryDraft(memory?.summary ?? "");
+    setEditingMemory(true);
+    setShowMemory(true);
+  }
+
+  // Seed or correct the memory file by hand — the post-chat rewrites fold
+  // future conversations into whatever is saved here.
+  async function saveMemoryEdit() {
+    const summary = memoryDraft.trim();
+    if (!summary) return;
+    setError(null);
+    const res = await fetch("/api/memory", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ summary }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setError(data.error || "Could not save the memory");
+      return;
+    }
+    setEditingMemory(false);
+    await loadMemory();
   }
 
   const name = status?.userName ?? "there";
@@ -278,34 +307,76 @@ export default function ChatPage() {
           <button onClick={begin}>💬 Start chatting</button>
           {error && <p className="error">{error}</p>}
 
-          {memory && (
-            <div style={{ marginTop: "1.2rem" }}>
-              <p className="sub" style={{ marginBottom: "0.3rem" }}>
-                <a
-                  className="admin-link"
-                  onClick={() => setShowMemory((v) => !v)}
-                  style={{ cursor: "pointer" }}
-                >
-                  {showMemory ? "Hide" : "Show"} what your bestie remembers (
-                  {memory.conversationCount} chat{memory.conversationCount === 1 ? "" : "s"}) →
-                </a>
-              </p>
-              {showMemory && (
-                <div className="res-item" style={{ cursor: "default" }}>
-                  <p style={{ margin: 0, fontSize: "0.85rem", whiteSpace: "pre-wrap" }}>
-                    {memory.summary}
-                  </p>
-                  <button
-                    className="secondary"
-                    onClick={eraseMemory}
-                    style={{ marginTop: "0.6rem" }}
-                  >
-                    Erase memory
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
+          <div style={{ marginTop: "1.2rem" }}>
+            <p className="sub" style={{ marginBottom: "0.3rem" }}>
+              <a
+                className="admin-link"
+                onClick={() => (memory ? setShowMemory((v) => !v) : startEditMemory())}
+                style={{ cursor: "pointer" }}
+              >
+                {memory
+                  ? `${showMemory ? "Hide" : "Show"} what your bestie remembers (${memory.conversationCount} chat${memory.conversationCount === 1 ? "" : "s"}) →`
+                  : `Teach your bestie about ${name} →`}
+              </a>
+            </p>
+            {showMemory && (
+              <div className="res-item" style={{ cursor: "default" }}>
+                {editingMemory ? (
+                  <>
+                    <textarea
+                      value={memoryDraft}
+                      onChange={(e) => setMemoryDraft(e.target.value)}
+                      rows={7}
+                      maxLength={1500}
+                      placeholder={`Plain facts your bestie should know, e.g. "${name} is 12 and loves…" (about 130 words)`}
+                      style={{ fontSize: "0.9rem" }}
+                    />
+                    <div className="row">
+                      <button
+                        className="secondary"
+                        onClick={() => {
+                          setEditingMemory(false);
+                          if (!memory) setShowMemory(false);
+                        }}
+                        style={{ marginTop: "0.6rem" }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={saveMemoryEdit}
+                        disabled={!memoryDraft.trim()}
+                        style={{ marginTop: "0.6rem" }}
+                      >
+                        Save memory
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p style={{ margin: 0, fontSize: "0.85rem", whiteSpace: "pre-wrap" }}>
+                      {memory?.summary}
+                    </p>
+                    <div className="row">
+                      <button
+                        className="secondary"
+                        onClick={startEditMemory}
+                        style={{ marginTop: "0.6rem" }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="secondary"
+                        onClick={eraseMemory}
+                        style={{ marginTop: "0.6rem" }}
+                      >
+                        Erase memory
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       ) : (
         <div className="panel">

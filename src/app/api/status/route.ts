@@ -11,7 +11,6 @@ export const runtime = "nodejs";
 export async function GET() {
   return NextResponse.json({
     userName: config.user.name,
-    language: config.user.language,
     accessRequired: accessRequired(),
   });
 }

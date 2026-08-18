@@ -4,8 +4,6 @@ export const config = {
   /** Who this app belongs to — one person, one memory. Penny's app. */
   user: {
     name: "Penny",
-    /** Default chat language (en, zh, ja, th, vi, de, ko, fr). */
-    language: process.env.CHAT_LANGUAGE || "en",
   },
   anthropic: {
     // Memory rewrites run post-chat, but a fast model keeps costs negligible.

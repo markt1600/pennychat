@@ -30,7 +30,6 @@ memory design) this app is built on.
 | `ELEVENLABS_FAST_LLM` | no | Per-session LLM override, e.g. `claude-haiku-4-5` (agent must allow the LLM override) |
 | `ANTHROPIC_API_KEY` | yes | Memory rewrites after each chat + photo descriptions |
 | `FAST_MODEL` | no | Model for memory rewrites and photo vision (default `claude-haiku-4-5`) |
-| `CHAT_LANGUAGE` | no | Default language: en, zh, ja, th, vi, de, ko, fr (default `en`) |
 | `ACCESS_CODE` | recommended | Shared code the chat page asks for once — keeps strangers out of a public URL (and out of the memory file) |
 | `KV_REST_API_URL` + `KV_REST_API_TOKEN` | prod | Upstash/Vercel KV for the memory file (dev falls back to `.data/store.json`) |
 

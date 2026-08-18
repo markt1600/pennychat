@@ -13,6 +13,13 @@ has the env-var table and setup steps.
 
 ## Working rules
 
+- **Every app we build ships with link-preview polish** (Mark's standing
+  preference, applies to all projects): Open Graph + Twitter metadata with
+  an absolute `metadataBase`, plus generated `opengraph-image.tsx`,
+  `icon.tsx`, and `apple-icon.tsx` (Next `ImageResponse`) so pasting the
+  URL into WhatsApp/iMessage shows a proper image, name, and description.
+  See `src/app/opengraph-image.tsx` and `layout.tsx` here for the pattern.
+
 - **Verify with a full build before committing**: run `npm run build` and
   read the END of the output (don't grep for "Compiled successfully" —
   compilation can succeed while type-checking fails later in the output).

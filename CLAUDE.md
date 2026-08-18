@@ -31,11 +31,15 @@ has the env-var table and setup steps.
 
 ## Layout
 
-- `src/app/page.tsx` — the whole chat UI (voice hands-free / push-to-talk /
-  text, transcript, memory viewer + erase, access-code gate)
+- `src/app/page.tsx` — the whole chat UI (voice / text, photo sharing,
+  transcript, code gate, admin-only memory + conversation-summary views)
 - `src/app/api/chat/token/route.ts` — session token + lean prompt + memory
-- `src/app/api/elevenlabs/webhook/route.ts` — post-chat memory rewrite
-- `src/app/api/memory/route.ts` — view/erase memory
+- `src/app/api/elevenlabs/webhook/route.ts` — post-chat memory rewrite +
+  conversation summary
+- `src/app/api/photo/route.ts` — Claude-vision description of shared photos
+- `src/app/api/memory/route.ts` — view/seed/edit/erase memory (admin only)
+- `src/app/api/conversations/route.ts` — per-chat summaries (admin only)
 - `src/lib/memory.ts` — the rolling-summary memory design
-- `src/lib/access.ts` — ACCESS_CODE gate
+- `src/lib/conversations.ts` — parent-facing conversation log
+- `src/lib/access.ts` — ACCESS_CODE / ADMIN_CODE gate
 - `src/lib/store.ts` — KV (Upstash/Vercel KV in prod, local file in dev)

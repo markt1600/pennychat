@@ -28,6 +28,11 @@ export const config = {
    * strangers chat into the memory file. Unset = open (e.g. local dev).
    */
   accessCode: process.env.ACCESS_CODE || "",
+  /**
+   * Parent code. Entered at the same gate instead of the access code, it
+   * additionally unlocks memory management and conversation summaries.
+   */
+  adminCode: process.env.ADMIN_CODE || "",
   kv: resolveKv(),
 };
 

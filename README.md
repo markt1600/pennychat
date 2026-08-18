@@ -31,6 +31,7 @@ memory design) this app is built on.
 | `ANTHROPIC_API_KEY` | yes | Memory rewrites after each chat + photo descriptions |
 | `FAST_MODEL` | no | Model for memory rewrites and photo vision (default `claude-haiku-4-5`) |
 | `ACCESS_CODE` | recommended | Shared code the chat page asks for once — keeps strangers out of a public URL (and out of the memory file) |
+| `ADMIN_CODE` | recommended | Parent code — enter it at the same gate *instead of* the access code to unlock memory management and per-chat conversation summaries |
 | `KV_REST_API_URL` + `KV_REST_API_TOKEN` | prod | Upstash/Vercel KV for the memory file (dev falls back to `.data/store.json`) |
 
 4. In the ElevenLabs dashboard, point the agent's **post-call webhook** at
@@ -52,4 +53,8 @@ memory design) this app is built on.
 - When the chat ends, ElevenLabs POSTs the transcript to
   `/api/elevenlabs/webhook`, which rewrites the rolling memory file
   (~300 words) with a fast model. Next chat, the companion remembers.
-- The chat page can show and erase the memory — it's never a black box.
+- **Parent view** (`ADMIN_CODE`): entering the admin code at the gate
+  unlocks memory management (view / seed / edit / erase) and a log of
+  per-chat summaries (written by a fast model at webhook time — never the
+  full transcripts). With only the access code, none of that is shown.
+- A Sign out link (start page and in-chat) forgets the stored code.

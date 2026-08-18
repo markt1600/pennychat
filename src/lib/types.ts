@@ -14,3 +14,14 @@ export interface PersonMemory {
   conversationCount: number;
   lastConversationAt: string;
 }
+
+/**
+ * A parent-facing summary of one finished chat — reasonably detailed but
+ * never the full transcript. Written by a fast model at webhook time.
+ */
+export interface ConversationSummary {
+  id: string;
+  at: string;
+  turnCount: number;
+  summary: string;
+}

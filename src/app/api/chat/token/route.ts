@@ -11,20 +11,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { checkAccess } from "@/lib/access";
 import { config, requireEnv } from "@/lib/config";
 import { loadMemory } from "@/lib/memory";
-import { CHAT_LANGUAGES, LANGUAGE_NAMES, type ChatLanguage } from "@/lib/types";
 
 export const runtime = "nodejs";
 
-const FIRST_MESSAGES: Record<ChatLanguage, string> = {
-  en: "Heyyyy girlie!!! Omg hi {name}, I missed you SO much — okay gimme ALL the updates, what's going on today?!",
-  ja: "こんにちは、{name}さん！お話できてうれしいです。今日はいかがですか？",
-  zh: "你好，{name}！很高兴跟你聊聊——你今天怎么样？",
-  th: "สวัสดีค่ะ {name}! ดีใจที่ได้คุยกันนะคะ วันนี้เป็นยังไงบ้างคะ?",
-  vi: "Chào {name}! Vui được nói chuyện với bạn — hôm nay bạn thế nào?",
-  de: "Hallo {name}! Schön, von dir zu hören — wie geht's dir heute?",
-  ko: "안녕하세요, {name}님! 이렇게 이야기 나눌 수 있어 반가워요 — 오늘 어떻게 지내세요?",
-  fr: "Bonjour {name} ! Contente de te parler — comment vas-tu aujourd'hui ?",
-};
+// English-only app — the chat always runs in English.
+const FIRST_MESSAGE =
+  "Heyyyy girlie!!! Omg hi {name}, I missed you SO much — okay gimme ALL the updates, what's going on today?!";
 
 /**
  * Lean session prompt. Keep it SHORT — prompt size directly affects
@@ -51,15 +43,8 @@ export async function POST(request: NextRequest) {
     const denied = checkAccess(request);
     if (denied) return NextResponse.json({ error: denied }, { status: 401 });
 
-    const body = await request.json().catch(() => ({}) as Record<string, unknown>);
     const name = config.user.name;
-    const language: ChatLanguage = CHAT_LANGUAGES.includes(body.language as ChatLanguage)
-      ? (body.language as ChatLanguage)
-      : CHAT_LANGUAGES.includes(config.user.language as ChatLanguage)
-        ? (config.user.language as ChatLanguage)
-        : "en";
-
-    const firstMessage = FIRST_MESSAGES[language].replaceAll("{name}", name);
+    const firstMessage = FIRST_MESSAGE.replaceAll("{name}", name);
     const mem = await loadMemory();
 
     const agentId = requireEnv(config.elevenlabs.agentId, "ELEVENLABS_AGENT_ID");
@@ -75,13 +60,13 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       token: data.token,
-      language,
+      language: "en",
       firstMessage,
       chatPrompt: chatPrompt(name, mem?.summary ?? null),
       chatLlm: config.elevenlabs.fastLlm || undefined,
       dynamicVariables: {
         caller_name: name,
-        call_language: LANGUAGE_NAMES[language],
+        call_language: "English",
         first_message: firstMessage,
         // Fallback for a dashboard prompt using {{memory}} (only needed if
         // the prompt override is rejected).

@@ -6,16 +6,15 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Conversation, type Language } from "@elevenlabs/client";
-import { LANGUAGE_NAMES, type ChatLanguage, type PersonMemory } from "@/lib/types";
+import { type PersonMemory } from "@/lib/types";
 
 interface Status {
   userName: string;
-  language: string;
   accessRequired: boolean;
 }
 
 type Turn = { role: "you" | "agent"; text: string; imageUrl?: string };
-type Mode = "handsfree" | "ptt" | "text";
+type Mode = "voice" | "text";
 
 const ACCESS_KEY = "pennyAccessCode";
 
@@ -45,13 +44,11 @@ export default function ChatPage() {
   const [status, setStatus] = useState<Status | null>(null);
   const [accessCode, setAccessCode] = useState<string>("");
   const [unlocked, setUnlocked] = useState(false);
-  const [language, setLanguage] = useState<ChatLanguage>("en");
-  const [mode, setMode] = useState<Mode>("handsfree");
+  const [mode, setMode] = useState<Mode>("voice");
   const [phase, setPhase] = useState<"idle" | "connecting" | "live" | "ended">("idle");
   const [turns, setTurns] = useState<Turn[]>([]);
   const [speaking, setSpeaking] = useState(false);
   const [muted, setMuted] = useState(false);
-  const [talking, setTalking] = useState(false);
   const [typed, setTyped] = useState("");
   const [sendingPhoto, setSendingPhoto] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +57,6 @@ export default function ChatPage() {
   const convo = useRef<Conversation | null>(null);
   const photoInput = useRef<HTMLInputElement | null>(null);
   const transcriptEnd = useRef<HTMLDivElement | null>(null);
-  const activityPing = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const authHeaders = useCallback((): Record<string, string> => {
     const code = localStorage.getItem(ACCESS_KEY);
@@ -72,7 +68,6 @@ export default function ChatPage() {
       .then((r) => r.json())
       .then((s: Status) => {
         setStatus(s);
-        setLanguage((s.language as ChatLanguage) || "en");
         if (!s.accessRequired || localStorage.getItem(ACCESS_KEY)) setUnlocked(true);
       })
       .catch(() => setUnlocked(true));
@@ -92,50 +87,6 @@ export default function ChatPage() {
     if (unlocked) loadMemory();
   }, [unlocked, loadMemory]);
 
-  // Push-to-talk: the mic stays closed between turns. Holding opens it and
-  // pings "user is active" so the agent won't talk over you; releasing closes
-  // it again, which gives the agent clean digital silence to end the turn on.
-  const startTalking = useCallback(() => {
-    if (!convo.current || phase !== "live") return;
-    setTalking(true);
-    convo.current.setMicMuted(false);
-    convo.current.sendUserActivity();
-    activityPing.current ??= setInterval(() => convo.current?.sendUserActivity(), 1500);
-  }, [phase]);
-
-  const stopTalking = useCallback(() => {
-    if (activityPing.current) {
-      clearInterval(activityPing.current);
-      activityPing.current = null;
-    }
-    if (!convo.current) return;
-    setTalking(false);
-    convo.current.setMicMuted(true);
-  }, []);
-
-  // Spacebar as the push-to-talk key.
-  useEffect(() => {
-    if (phase !== "live" || mode !== "ptt") return;
-    const isTyping = (el: EventTarget | null) =>
-      el instanceof HTMLElement && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName);
-    const down = (e: KeyboardEvent) => {
-      if (e.code !== "Space" || e.repeat || isTyping(e.target)) return;
-      e.preventDefault();
-      startTalking();
-    };
-    const up = (e: KeyboardEvent) => {
-      if (e.code !== "Space" || isTyping(e.target)) return;
-      e.preventDefault();
-      stopTalking();
-    };
-    window.addEventListener("keydown", down);
-    window.addEventListener("keyup", up);
-    return () => {
-      window.removeEventListener("keydown", down);
-      window.removeEventListener("keyup", up);
-    };
-  }, [phase, mode, startTalking, stopTalking]);
-
   // Keep the newest turn in view.
   useEffect(() => {
     transcriptEnd.current?.scrollIntoView({ behavior: "smooth" });
@@ -144,7 +95,6 @@ export default function ChatPage() {
   // Never leave a live session running behind a closed page.
   useEffect(() => {
     return () => {
-      if (activityPing.current) clearInterval(activityPing.current);
       convo.current?.endSession().catch(() => {});
       convo.current = null;
     };
@@ -165,7 +115,7 @@ export default function ChatPage() {
       const res = await fetch("/api/chat/token", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ language }),
+        body: JSON.stringify({}),
       });
       const data = await res.json();
       if (res.status === 401) {
@@ -183,14 +133,7 @@ export default function ChatPage() {
         overrides,
         textOnly,
         onStatusChange: ({ status: s }: { status: string }) => {
-          if (s === "connected") {
-            setPhase("live");
-            // Push-to-talk starts with the mic closed.
-            if (mode === "ptt") {
-              convo.current?.setMicMuted(true);
-              setTalking(false);
-            }
-          }
+          if (s === "connected") setPhase("live");
           if (s === "disconnected") setPhase((p) => (p === "idle" ? p : "ended"));
         },
         onModeChange: ({ mode: m }: { mode: string }) => setSpeaking(m === "speaking"),
@@ -234,18 +177,13 @@ export default function ChatPage() {
       );
       setPhase("idle");
     }
-  }, [language, mode, authHeaders]);
+  }, [mode, authHeaders]);
 
   async function end() {
-    if (activityPing.current) {
-      clearInterval(activityPing.current);
-      activityPing.current = null;
-    }
     await convo.current?.endSession().catch(() => {});
     convo.current = null;
     setPhase("ended");
     setSpeaking(false);
-    setTalking(false);
     // The webhook rewrites memory shortly after the chat ends.
     setTimeout(loadMemory, 8000);
   }
@@ -332,21 +270,9 @@ export default function ChatPage() {
       {phase === "idle" || phase === "ended" ? (
         <div className="panel">
           <h2>{phase === "ended" ? "Chat again?" : `Hi ${name}!`}</h2>
-          <label>Language</label>
-          <select
-            value={language}
-            onChange={(e) => setLanguage(e.target.value as ChatLanguage)}
-          >
-            {(Object.keys(LANGUAGE_NAMES) as ChatLanguage[]).map((l) => (
-              <option key={l} value={l}>
-                {LANGUAGE_NAMES[l]}
-              </option>
-            ))}
-          </select>
           <label>How do you want to chat?</label>
           <select value={mode} onChange={(e) => setMode(e.target.value as Mode)}>
-            <option value="handsfree">Hands-free — just talk, like a real call</option>
-            <option value="ptt">Push to talk — hold to speak (better in noisy places)</option>
+            <option value="voice">Voice — just talk, like a real call</option>
             <option value="text">Text — type and read replies</option>
           </select>
           <button onClick={begin}>💬 Start chatting</button>
@@ -407,11 +333,9 @@ export default function ChatPage() {
               <p className="sub">
                 {phase === "connecting"
                   ? "Setting up the connection…"
-                  : mode === "ptt"
-                    ? "Hold the button (or the spacebar) and say hello."
-                    : mode === "handsfree"
-                      ? "Say hi — she can hear you!"
-                      : "Type a message below to get started."}
+                  : mode === "voice"
+                    ? "Say hi — she can hear you!"
+                    : "Type a message below to get started."}
               </p>
             )}
             {turns.map((t, i) => (
@@ -451,35 +375,6 @@ export default function ChatPage() {
             </div>
           )}
 
-          {mode === "ptt" && phase === "live" && (
-            <>
-              <button
-                type="button"
-                className={talking ? "" : "secondary"}
-                onPointerDown={(e) => {
-                  e.currentTarget.setPointerCapture(e.pointerId);
-                  startTalking();
-                }}
-                onPointerUp={stopTalking}
-                onPointerCancel={stopTalking}
-                onContextMenu={(e) => e.preventDefault()}
-                style={{
-                  width: "100%",
-                  marginTop: "0.9rem",
-                  minHeight: 64,
-                  fontSize: "0.95rem",
-                  touchAction: "none",
-                  userSelect: "none",
-                }}
-              >
-                {talking ? "🎙 Listening — release to send" : "🎤 Hold to talk"}
-              </button>
-              <p className="sub" style={{ margin: "0.4rem 0 0", textAlign: "center" }}>
-                Or hold the <strong>spacebar</strong>.
-              </p>
-            </>
-          )}
-
           <div className="row">
             {phase === "live" && (
               <>
@@ -503,7 +398,7 @@ export default function ChatPage() {
                 </button>
               </>
             )}
-            {mode === "handsfree" && phase === "live" && (
+            {mode === "voice" && phase === "live" && (
               <button className="secondary" onClick={toggleMute}>
                 {muted ? "🔇 Unmute" : "🎙 Mute"}
               </button>

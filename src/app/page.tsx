@@ -14,10 +14,32 @@ interface Status {
   accessRequired: boolean;
 }
 
-type Turn = { role: "you" | "agent"; text: string };
+type Turn = { role: "you" | "agent"; text: string; imageUrl?: string };
 type Mode = "handsfree" | "ptt" | "text";
 
 const ACCESS_KEY = "pennyAccessCode";
+
+// Marks a user message that carries a photo description (see /api/photo).
+// The session prompt tells the agent to react to these as pictures; the
+// transcript hides them because the thumbnail turn is already shown.
+const PHOTO_TAG = "[PHOTO]";
+
+// Downscale a photo in the browser so the upload stays small (and Claude
+// vision cheap) — phone camera images are far bigger than needed.
+async function shrinkPhoto(file: File): Promise<string> {
+  const bitmap = await createImageBitmap(file).catch(() => {
+    throw new Error("That photo format didn't work — try a JPG or PNG.");
+  });
+  const scale = Math.min(1, 1280 / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Could not read the photo.");
+  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  return canvas.toDataURL("image/jpeg", 0.8);
+}
 
 export default function ChatPage() {
   const [status, setStatus] = useState<Status | null>(null);
@@ -31,10 +53,12 @@ export default function ChatPage() {
   const [muted, setMuted] = useState(false);
   const [talking, setTalking] = useState(false);
   const [typed, setTyped] = useState("");
+  const [sendingPhoto, setSendingPhoto] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [memory, setMemory] = useState<PersonMemory | null>(null);
   const [showMemory, setShowMemory] = useState(false);
   const convo = useRef<Conversation | null>(null);
+  const photoInput = useRef<HTMLInputElement | null>(null);
   const transcriptEnd = useRef<HTMLDivElement | null>(null);
   const activityPing = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -172,6 +196,9 @@ export default function ChatPage() {
         onModeChange: ({ mode: m }: { mode: string }) => setSpeaking(m === "speaking"),
         onMessage: ({ message, source }: { message: string; source: string }) => {
           if (!message?.trim()) return;
+          // Photo-description messages echo back as user turns; the photo
+          // itself is already in the transcript, so skip the text.
+          if (source === "user" && message.startsWith(PHOTO_TAG)) return;
           setTurns((t) => [...t, { role: source === "user" ? "you" : "agent", text: message }]);
         },
         onError: (msg: string) => setError(msg),
@@ -236,8 +263,36 @@ export default function ChatPage() {
     setTyped("");
   }
 
+  // Share a photo: downscale it, have the server describe it (Claude vision),
+  // then hand the description to the agent as a tagged user message so it can
+  // react as if it saw the picture. Works in voice and text modes alike.
+  const sendPhoto = useCallback(
+    async (file: File) => {
+      if (!convo.current || sendingPhoto) return;
+      setError(null);
+      setSendingPhoto(true);
+      try {
+        const dataUrl = await shrinkPhoto(file);
+        setTurns((t) => [...t, { role: "you", text: "", imageUrl: dataUrl }]);
+        const res = await fetch("/api/photo", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...authHeaders() },
+          body: JSON.stringify({ image: dataUrl }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Could not send the photo");
+        convo.current?.sendUserMessage(`${PHOTO_TAG} ${data.description}`);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setSendingPhoto(false);
+      }
+    },
+    [authHeaders, sendingPhoto],
+  );
+
   async function eraseMemory() {
-    if (!window.confirm("Erase everything your friend remembers? This cannot be undone.")) return;
+    if (!window.confirm("Erase everything your bestie remembers? This cannot be undone.")) return;
     await fetch("/api/memory", { method: "DELETE", headers: authHeaders() });
     setMemory(null);
   }
@@ -272,7 +327,7 @@ export default function ChatPage() {
       <h1>
         Penny <em>Chat</em>
       </h1>
-      <p className="sub">Your friend is here — and remembers your last chat.</p>
+      <p className="sub">Your bestie is here — talk, type, or send pics. She remembers everything, no cap.</p>
 
       {phase === "idle" || phase === "ended" ? (
         <div className="panel">
@@ -305,7 +360,7 @@ export default function ChatPage() {
                   onClick={() => setShowMemory((v) => !v)}
                   style={{ cursor: "pointer" }}
                 >
-                  {showMemory ? "Hide" : "Show"} what your friend remembers (
+                  {showMemory ? "Hide" : "Show"} what your bestie remembers (
                   {memory.conversationCount} chat{memory.conversationCount === 1 ? "" : "s"}) →
                 </a>
               </p>
@@ -355,14 +410,23 @@ export default function ChatPage() {
                   : mode === "ptt"
                     ? "Hold the button (or the spacebar) and say hello."
                     : mode === "handsfree"
-                      ? "Say hello — they can hear you."
+                      ? "Say hi — she can hear you!"
                       : "Type a message below to get started."}
               </p>
             )}
             {turns.map((t, i) => (
               <div key={i} className={`turn ${t.role === "you" ? "restaurant" : "agent"}`}>
-                <div className="who">{t.role === "you" ? "you" : "friend"}</div>
-                <div>{t.text}</div>
+                <div className="who">{t.role === "you" ? "you" : "bestie"}</div>
+                {t.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={t.imageUrl}
+                    alt="Photo you shared"
+                    style={{ display: "block", width: 220, maxWidth: "100%", borderRadius: 8 }}
+                  />
+                ) : (
+                  <div>{t.text}</div>
+                )}
               </div>
             ))}
             <div ref={transcriptEnd} />
@@ -417,6 +481,28 @@ export default function ChatPage() {
           )}
 
           <div className="row">
+            {phase === "live" && (
+              <>
+                <input
+                  ref={photoInput}
+                  type="file"
+                  accept="image/*"
+                  hidden
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = "";
+                    if (file) sendPhoto(file);
+                  }}
+                />
+                <button
+                  className="secondary"
+                  onClick={() => photoInput.current?.click()}
+                  disabled={sendingPhoto}
+                >
+                  {sendingPhoto ? "📷 Sending…" : "📷 Send a pic"}
+                </button>
+              </>
+            )}
             {mode === "handsfree" && phase === "live" && (
               <button className="secondary" onClick={toggleMute}>
                 {muted ? "🔇 Unmute" : "🎙 Mute"}

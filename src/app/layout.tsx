@@ -20,7 +20,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 const APP_NAME = "Penny Chat";
-const DESCRIPTION = "A friendly voice companion that remembers you.";
+const DESCRIPTION = "Your AI bestie — talk, type, or send pics. She remembers every chat.";
 
 export const metadata: Metadata = {
   title: APP_NAME,

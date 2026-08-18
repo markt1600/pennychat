@@ -51,5 +51,5 @@ memory design) this app is built on.
   browser and never stored server-side.
 - When the chat ends, ElevenLabs POSTs the transcript to
   `/api/elevenlabs/webhook`, which rewrites the rolling memory file
-  (~130 words) with a fast model. Next chat, the companion remembers.
+  (~300 words) with a fast model. Next chat, the companion remembers.
 - The chat page can show and erase the memory — it's never a black box.

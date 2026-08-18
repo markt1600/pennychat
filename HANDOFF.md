@@ -75,16 +75,17 @@ The dashboard config matters as much as the code. In the agent's
 
 Replaying past transcripts would grow the prompt — and latency — forever.
 Instead: after each chat, the webhook hands the transcript to a fast model
-that REWRITES a single rolling memory file, capped at ~130 words (1500
-chars hard cap as a backstop). Only that file is injected into the next
-session. Properties that matter:
+that REWRITES a single rolling memory file, capped at ~300 words (4000
+chars hard cap as a backstop; raised from the original 130/1500 when the
+memory was seeded with a rich profile). Only that file is injected into
+the next session. Properties that matter:
 
 - **Bounded**: prompt cost is constant no matter how many chats happen.
-- **~130 words is deliberate**: big enough for a real person's working
-  recall of a friend (10–15 durable facts), small enough that the rewrite
-  model must prioritize instead of hoarding stale details, and only
-  ~180 tokens on every session start. Tune via the prompt in
-  `src/lib/memory.ts` if the companion forgets too much.
+- **The cap is deliberate**: big enough for a real person's working
+  recall of a friend, small enough that the rewrite model must prioritize
+  instead of hoarding stale details, and only ~400 tokens on every
+  session start. Tune via the prompt in `src/lib/memory.ts` if the
+  companion forgets too much — but remember prompt size is latency.
 - **"Newest wins"** on conflict, and the rewrite drops small talk.
 - **Injection, two paths**: the override path bakes the memory text into
   the session prompt; the fallback path sends it as the `{{memory}}`

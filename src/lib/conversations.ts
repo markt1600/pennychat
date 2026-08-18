@@ -14,6 +14,21 @@ export async function loadConversationLog(): Promise<ConversationSummary[]> {
   return (await getJSON<ConversationSummary[]>(LOG_KEY)) ?? [];
 }
 
+/** Remove one summary from the log. */
+export async function deleteConversation(id: string): Promise<void> {
+  const existing = await loadConversationLog();
+  await setJSON(
+    LOG_KEY,
+    existing.filter((c) => c.id !== id),
+  );
+}
+
+/** Wipe the whole conversation log. */
+export async function clearConversationLog(): Promise<void> {
+  const { store } = await import("./store");
+  await store().del(LOG_KEY);
+}
+
 /**
  * Summarize a finished chat and append it to the log. Runs at webhook time
  * alongside the memory rewrite; never throws — a failed summary just means

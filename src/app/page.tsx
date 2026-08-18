@@ -270,6 +270,29 @@ export default function ChatPage() {
     setShowMemory(false);
   }
 
+  async function deleteSummary(id: string) {
+    if (!window.confirm("Delete this conversation summary?")) return;
+    const res = await fetch(`/api/conversations?id=${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) setConversations(data.conversations ?? []);
+  }
+
+  async function clearSummaries() {
+    if (!window.confirm("Delete ALL conversation summaries? This cannot be undone.")) return;
+    const res = await fetch("/api/conversations?all=1", {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      setConversations(data.conversations ?? []);
+      setShowLog(false);
+    }
+  }
+
   // Forget the stored code and return to the gate (ends any live chat).
   async function signOut() {
     await convo.current?.endSession().catch(() => {});
@@ -443,18 +466,38 @@ export default function ChatPage() {
             {showLog &&
               conversations.map((c) => (
                 <div key={c.id} className="res-item" style={{ cursor: "default" }}>
-                  <div className="meta" style={{ marginBottom: "0.25rem" }}>
-                    {new Date(c.at).toLocaleString(undefined, {
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    })}{" "}
-                    · {c.turnCount} turns{c.parentChat ? " · parent chat (not remembered)" : ""}
+                  <div
+                    className="row"
+                    style={{ justifyContent: "space-between", flexWrap: "nowrap" }}
+                  >
+                    <div className="meta" style={{ marginBottom: "0.25rem" }}>
+                      {new Date(c.at).toLocaleString(undefined, {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })}{" "}
+                      · {c.turnCount} turns{c.parentChat ? " · parent chat (not remembered)" : ""}
+                    </div>
+                    <button
+                      className="delete-btn"
+                      title="Delete this summary"
+                      onClick={() => deleteSummary(c.id)}
+                      style={{ flexShrink: 0 }}
+                    >
+                      ✕
+                    </button>
                   </div>
                   <p style={{ margin: 0, fontSize: "0.85rem", whiteSpace: "pre-wrap" }}>
                     {c.summary}
                   </p>
                 </div>
               ))}
+            {showLog && conversations.length > 1 && (
+              <p className="sub" style={{ margin: "0.2rem 0 0" }}>
+                <a className="admin-link" onClick={clearSummaries} style={{ cursor: "pointer" }}>
+                  Delete all summaries
+                </a>
+              </p>
+            )}
           </div>
           )}
 

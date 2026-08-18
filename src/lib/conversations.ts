@@ -19,7 +19,11 @@ export async function loadConversationLog(): Promise<ConversationSummary[]> {
  * alongside the memory rewrite; never throws — a failed summary just means
  * one gap in the log.
  */
-export async function logConversation(id: string, turns: CallTurn[]): Promise<void> {
+export async function logConversation(
+  id: string,
+  turns: CallTurn[],
+  parentChat = false,
+): Promise<void> {
   if (turns.length === 0) return;
   const personName = config.user.name;
   try {
@@ -53,6 +57,7 @@ ${transcript}`,
       at: new Date().toISOString(),
       turnCount: turns.length,
       summary: block.text.trim(),
+      ...(parentChat ? { parentChat: true } : {}),
     };
     await setJSON(LOG_KEY, [entry, ...existing].slice(0, MAX_ENTRIES));
   } catch (err) {

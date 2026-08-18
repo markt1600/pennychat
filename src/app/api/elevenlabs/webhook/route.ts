@@ -64,8 +64,11 @@ export async function POST(request: NextRequest) {
       speaker: t.role === "agent" ? ("agent" as const) : ("user" as const),
       text: t.message!,
     }));
-  await updateMemoryFromConversation(turns);
-  // Parent view: also log a compact summary of the chat (never throws).
-  await logConversation(payload.data.conversation_id ?? "", turns);
+
+  // Parent (admin-code) chats never update the memory file — only Penny's
+  // own chats are hers to remember. They're still summarized, labeled.
+  const parentChat = dynVars.memory_update === "0";
+  if (!parentChat) await updateMemoryFromConversation(turns);
+  await logConversation(payload.data.conversation_id ?? "", turns, parentChat);
   return NextResponse.json({ ok: true });
 }

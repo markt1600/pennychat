@@ -24,4 +24,6 @@ export interface ConversationSummary {
   at: string;
   turnCount: number;
   summary: string;
+  /** True for admin-code (parent) chats — these never update memory. */
+  parentChat?: boolean;
 }

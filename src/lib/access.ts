@@ -39,3 +39,12 @@ export function isAdmin(request: NextRequest): boolean {
   if (config.adminCode) return matches(givenCode(request), config.adminCode);
   return !config.accessCode;
 }
+
+/**
+ * True only when the admin code itself was supplied. Unlike isAdmin this is
+ * never true in an open dev setup — used to mark parent chats so they don't
+ * update the memory file (dev chats still should).
+ */
+export function usedAdminCode(request: NextRequest): boolean {
+  return Boolean(config.adminCode) && matches(givenCode(request), config.adminCode);
+}

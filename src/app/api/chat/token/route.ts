@@ -8,7 +8,7 @@
 // dashboard prompt, which can use the same {{memory}} dynamic variable.
 
 import { NextRequest, NextResponse } from "next/server";
-import { checkAccess } from "@/lib/access";
+import { checkAccess, usedAdminCode } from "@/lib/access";
 import { config, requireEnv } from "@/lib/config";
 import { loadMemory } from "@/lib/memory";
 
@@ -75,6 +75,9 @@ export async function POST(request: NextRequest) {
         memory: mem?.summary ?? `You have not spoken with ${name} before.`,
         // Marks the conversation so the post-call webhook updates memory.
         pennychat: "1",
+        // Parent (admin-code) chats never touch the memory file — only
+        // Penny's own (access-code) chats are hers to remember.
+        memory_update: usedAdminCode(request) ? "0" : "1",
       },
     });
   } catch (err) {

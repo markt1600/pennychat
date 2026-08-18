@@ -448,7 +448,7 @@ export default function ChatPage() {
                       dateStyle: "medium",
                       timeStyle: "short",
                     })}{" "}
-                    · {c.turnCount} turns
+                    · {c.turnCount} turns{c.parentChat ? " · parent chat (not remembered)" : ""}
                   </div>
                   <p style={{ margin: 0, fontSize: "0.85rem", whiteSpace: "pre-wrap" }}>
                     {c.summary}

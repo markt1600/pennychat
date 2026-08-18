@@ -122,6 +122,11 @@ go read `src/lib/memory.ts` and `/api/chat/token` in callagent first.
   passes `checkAccess`, but only it satisfies `isAdmin` — which gates the
   memory routes and `/api/conversations` (per-chat summaries). With no
   codes configured at all (local dev) everything is open, including admin.
+- **Admin chats never update memory**: the token route stamps the session
+  with `memory_update: "0"` when the admin code was used (`usedAdminCode` —
+  deliberately false in open dev so local testing still exercises memory),
+  and the webhook skips the rewrite for those chats. They are still
+  summarized into the conversation log, flagged `parentChat`.
 - The Anthropic call checks `stop_reason === "refusal"` and skips the
   memory update rather than storing an error message as "memory".
 

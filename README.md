@@ -57,4 +57,7 @@ memory design) this app is built on.
   unlocks memory management (view / seed / edit / erase) and a log of
   per-chat summaries (written by a fast model at webhook time — never the
   full transcripts). With only the access code, none of that is shown.
+  Admin-code chats work normally but **never update the memory file** —
+  only access-code (Penny's) chats do. They still appear in the log,
+  labeled "parent chat".
 - A Sign out link (start page and in-chat) forgets the stored code.

@@ -6,6 +6,7 @@
 
 import { anthropic, assertNotRefusal } from "./claude";
 import { config } from "./config";
+import { sgToday } from "./dates";
 import { getJSON, setJSON } from "./store";
 import type { CallTurn, PersonMemory } from "./types";
 
@@ -59,7 +60,7 @@ export async function updateMemoryFromConversation(turns: CallTurn[]): Promise<v
       messages: [
         {
           role: "user",
-          content: `You maintain the compact memory file a friendly chat companion keeps about ${personName}.
+          content: `You maintain the compact memory file a friendly chat companion keeps about ${personName}. Today is ${sgToday()} (Singapore time).
 
 Current memory file:
 ${prior?.summary ?? "(empty — this was the first conversation)"}
@@ -67,7 +68,7 @@ ${prior?.summary ?? "(empty — this was the first conversation)"}
 Transcript of the conversation that just ended:
 ${transcript}
 
-Rewrite the memory file. Rules: at most 300 words; plain factual sentences; keep durable facts about ${personName} (school, friends, family, hobbies, likes and dislikes, plans, ongoing situations) and anything worth asking about next time; ${personName}'s messages starting with "[PHOTO]" describe photos ${personName} shared — keep durable facts from them (pets, people, places, things ${personName} made); merge with the existing facts — newest information wins on conflict; drop greetings and small talk; never include the agent's own remarks or the word "agent". Output ONLY the memory file text.`,
+Rewrite the memory file. Rules: at most 300 words; plain factual sentences; keep durable facts about ${personName} (school, friends, family, hobbies, likes and dislikes, plans, ongoing situations) and anything worth asking about next time; ${personName}'s messages starting with "[PHOTO]" describe photos ${personName} shared — keep durable facts from them (pets, people, places, things ${personName} made); merge with the existing facts — newest information wins on conflict; date-stamp time-sensitive facts using today's date (e.g. "as of Aug 2026", "test on 25 Aug 2026") so relative phrases like "next Friday" don't go stale; drop greetings and small talk; never include the agent's own remarks or the word "agent". Output ONLY the memory file text.`,
         },
       ],
     });

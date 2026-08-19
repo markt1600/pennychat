@@ -26,4 +26,6 @@ export interface ConversationSummary {
   summary: string;
   /** True for admin-code (parent) chats — these never update memory. */
   parentChat?: boolean;
+  /** Flagged by the summary model: a parent would want to see this soon. */
+  worthAttention?: boolean;
 }

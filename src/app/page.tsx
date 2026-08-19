@@ -18,6 +18,7 @@ type Turn = { role: "you" | "agent"; text: string; imageUrl?: string };
 type Mode = "voice" | "text";
 
 const ACCESS_KEY = "pennyAccessCode";
+const BG_KEY = "pennyChatBackground";
 
 // Marks a user message that carries a photo description (see /api/photo).
 // The session prompt tells the agent to react to these as pictures; the
@@ -26,11 +27,11 @@ const PHOTO_TAG = "[PHOTO]";
 
 // Downscale a photo in the browser so the upload stays small (and Claude
 // vision cheap) — phone camera images are far bigger than needed.
-async function shrinkPhoto(file: File): Promise<string> {
+async function shrinkPhoto(file: File, max = 1280): Promise<string> {
   const bitmap = await createImageBitmap(file).catch(() => {
     throw new Error("That photo format didn't work — try a JPG or PNG.");
   });
-  const scale = Math.min(1, 1280 / Math.max(bitmap.width, bitmap.height));
+  const scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(bitmap.width * scale));
   canvas.height = Math.max(1, Math.round(bitmap.height * scale));
@@ -59,9 +60,17 @@ export default function ChatPage() {
   const [memoryDraft, setMemoryDraft] = useState("");
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [showLog, setShowLog] = useState(false);
+  const [digest, setDigest] = useState<{ text: string; chatCount: number } | null>(null);
+  const [digestLoading, setDigestLoading] = useState(false);
+  const [showDigest, setShowDigest] = useState(false);
+  const [bg, setBg] = useState<string | null>(null);
   const convo = useRef<Conversation | null>(null);
   const photoInput = useRef<HTMLInputElement | null>(null);
+  const bgInput = useRef<HTMLInputElement | null>(null);
   const transcriptEnd = useRef<HTMLDivElement | null>(null);
+  // For spotting sessions that die before they really start.
+  const liveSince = useRef<number | null>(null);
+  const turnCount = useRef(0);
 
   const authHeaders = useCallback((): Record<string, string> => {
     const code = localStorage.getItem(ACCESS_KEY);
@@ -83,6 +92,7 @@ export default function ChatPage() {
 
   useEffect(() => {
     refreshStatus();
+    setBg(localStorage.getItem(BG_KEY));
   }, [refreshStatus]);
 
   const loadMemory = useCallback(async () => {
@@ -140,6 +150,8 @@ export default function ChatPage() {
     setError(null);
     setPhase("connecting");
     setTurns([]);
+    liveSince.current = null;
+    turnCount.current = 0;
     try {
       const res = await fetch("/api/chat/token", {
         method: "POST",
@@ -162,8 +174,24 @@ export default function ChatPage() {
         overrides,
         textOnly,
         onStatusChange: ({ status: s }: { status: string }) => {
-          if (s === "connected") setPhase("live");
-          if (s === "disconnected") setPhase((p) => (p === "idle" ? p : "ended"));
+          if (s === "connected") {
+            liveSince.current = Date.now();
+            setPhase("live");
+          }
+          if (s === "disconnected") {
+            // Connected then died within seconds, before anyone spoke:
+            // the voice service refused the session (agent config/safety).
+            if (
+              liveSince.current !== null &&
+              Date.now() - liveSince.current < 4000 &&
+              turnCount.current === 0
+            ) {
+              setError(
+                "The chat ended before it could start — the voice service might be unavailable right now. Tell Dad! 💜",
+              );
+            }
+            setPhase((p) => (p === "idle" ? p : "ended"));
+          }
         },
         onModeChange: ({ mode: m }: { mode: string }) => setSpeaking(m === "speaking"),
         onMessage: ({ message, source }: { message: string; source: string }) => {
@@ -171,6 +199,7 @@ export default function ChatPage() {
           // Photo-description messages echo back as user turns; the photo
           // itself is already in the transcript, so skip the text.
           if (source === "user" && message.startsWith(PHOTO_TAG)) return;
+          turnCount.current += 1;
           setTurns((t) => [...t, { role: source === "user" ? "you" : "agent", text: message }]);
         },
         onError: (msg: string) => setError(msg),
@@ -268,6 +297,62 @@ export default function ChatPage() {
     await fetch("/api/memory", { method: "DELETE", headers: authHeaders() });
     setMemory(null);
     setShowMemory(false);
+  }
+
+  // Penny can pick a chat background — stored on this device only, so it
+  // personalizes without touching anyone's config.
+  async function pickBackground(file: File) {
+    setError(null);
+    try {
+      const dataUrl = await shrinkPhoto(file, 1600);
+      localStorage.setItem(BG_KEY, dataUrl);
+      setBg(dataUrl);
+    } catch (e) {
+      setError(
+        e instanceof Error && /quota/i.test(String(e))
+          ? "That image is too big to save — try a smaller one."
+          : e instanceof Error
+            ? e.message
+            : String(e),
+      );
+    }
+  }
+
+  function removeBackground() {
+    localStorage.removeItem(BG_KEY);
+    setBg(null);
+  }
+
+  async function loadDigest() {
+    setShowDigest(true);
+    setDigestLoading(true);
+    try {
+      const res = await fetch("/api/digest", { headers: authHeaders() });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Could not build the digest");
+      setDigest(data.digest ? { text: data.digest, chatCount: data.chatCount } : null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setShowDigest(false);
+    } finally {
+      setDigestLoading(false);
+    }
+  }
+
+  async function exportData() {
+    setError(null);
+    const res = await fetch("/api/export", { headers: authHeaders() });
+    if (!res.ok) {
+      setError("Export failed — try again.");
+      return;
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `pennychat-export-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   async function deleteSummary(id: string) {
@@ -381,6 +466,35 @@ export default function ChatPage() {
           <button onClick={begin}>💬 Start chatting</button>
           {error && <p className="error">{error}</p>}
 
+          <p className="sub" style={{ margin: "0.9rem 0 0" }}>
+            <a
+              className="admin-link"
+              onClick={() => bgInput.current?.click()}
+              style={{ cursor: "pointer" }}
+            >
+              🎨 {bg ? "Change" : "Set"} chat background
+            </a>
+            {bg && (
+              <>
+                {" · "}
+                <a className="admin-link" onClick={removeBackground} style={{ cursor: "pointer" }}>
+                  Remove
+                </a>
+              </>
+            )}
+          </p>
+          <input
+            ref={bgInput}
+            type="file"
+            accept="image/*"
+            hidden
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (file) pickBackground(file);
+            }}
+          />
+
           {admin && (
           <div style={{ marginTop: "1.2rem" }}>
             <p className="sub" style={{ marginBottom: "0.3rem" }}>
@@ -452,6 +566,34 @@ export default function ChatPage() {
               </div>
             )}
 
+            <p className="sub" style={{ margin: "0.6rem 0 0.3rem" }}>
+              <a
+                className="admin-link"
+                onClick={() => (showDigest ? setShowDigest(false) : loadDigest())}
+                style={{ cursor: "pointer" }}
+              >
+                {showDigest ? "Hide" : "Show"} this week&apos;s digest →
+              </a>
+            </p>
+            {showDigest && (
+              <div className="res-item" style={{ cursor: "default" }}>
+                {digestLoading ? (
+                  <p style={{ margin: 0, fontSize: "0.85rem" }}>Writing the digest…</p>
+                ) : digest ? (
+                  <>
+                    <div className="meta" style={{ marginBottom: "0.25rem" }}>
+                      past 7 days · {digest.chatCount} chat{digest.chatCount === 1 ? "" : "s"}
+                    </div>
+                    <p style={{ margin: 0, fontSize: "0.85rem", whiteSpace: "pre-wrap" }}>
+                      {digest.text}
+                    </p>
+                  </>
+                ) : (
+                  <p style={{ margin: 0, fontSize: "0.85rem" }}>No chats in the past 7 days.</p>
+                )}
+              </div>
+            )}
+
             {conversations.length > 0 && (
               <p className="sub" style={{ margin: "0.6rem 0 0.3rem" }}>
                 <a
@@ -465,12 +607,22 @@ export default function ChatPage() {
             )}
             {showLog &&
               conversations.map((c) => (
-                <div key={c.id} className="res-item" style={{ cursor: "default" }}>
+                <div
+                  key={c.id}
+                  className="res-item"
+                  style={{
+                    cursor: "default",
+                    ...(c.worthAttention
+                      ? { borderColor: "rgba(192, 123, 40, 0.6)", background: "#f7efdd" }
+                      : {}),
+                  }}
+                >
                   <div
                     className="row"
                     style={{ justifyContent: "space-between", flexWrap: "nowrap" }}
                   >
                     <div className="meta" style={{ marginBottom: "0.25rem" }}>
+                      {c.worthAttention ? "⚠ worth a look · " : ""}
                       {new Date(c.at).toLocaleString(undefined, {
                         dateStyle: "medium",
                         timeStyle: "short",
@@ -498,6 +650,12 @@ export default function ChatPage() {
                 </a>
               </p>
             )}
+
+            <p className="sub" style={{ margin: "0.6rem 0 0" }}>
+              <a className="admin-link" onClick={exportData} style={{ cursor: "pointer" }}>
+                ⬇ Download everything (JSON)
+              </a>
+            </p>
           </div>
           )}
 
@@ -530,7 +688,21 @@ export default function ChatPage() {
             </button>
           </div>
 
-          <div className="transcript" style={{ marginTop: "0.8rem" }}>
+          <div
+            className="transcript"
+            style={{
+              marginTop: "0.8rem",
+              ...(bg
+                ? {
+                    backgroundImage: `linear-gradient(rgba(250, 246, 236, 0.72), rgba(250, 246, 236, 0.72)), url(${bg})`,
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                    borderRadius: 10,
+                    padding: "0.6rem",
+                  }
+                : {}),
+            }}
+          >
             {turns.length === 0 && (
               <p className="sub">
                 {phase === "connecting"

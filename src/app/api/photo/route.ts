@@ -8,6 +8,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { checkAccess } from "@/lib/access";
 import { anthropic, assertNotRefusal } from "@/lib/claude";
 import { config } from "@/lib/config";
+import { sgDateKey } from "@/lib/dates";
+import { getJSON, setJSON } from "@/lib/store";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -16,6 +18,9 @@ const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"] as 
 // ~3MB of image; the client downscales to ~1280px JPEG so real payloads are
 // far smaller — this is a backstop, and keeps us under Vercel's body limit.
 const MAX_BASE64_CHARS = 4_000_000;
+// This route spends Anthropic credits per call — cap it so a leaked access
+// code can't run up a bill. Plenty for real use.
+const DAILY_PHOTO_LIMIT = 50;
 
 export async function POST(request: NextRequest) {
   try {
@@ -35,6 +40,16 @@ export async function POST(request: NextRequest) {
     if (data.length > MAX_BASE64_CHARS) {
       return NextResponse.json({ error: "That photo is too large" }, { status: 400 });
     }
+
+    const limitKey = `ratelimit:photo:${sgDateKey()}`;
+    const used = (await getJSON<number>(limitKey)) ?? 0;
+    if (used >= DAILY_PHOTO_LIMIT) {
+      return NextResponse.json(
+        { error: "That's a lot of photos for one day! Try again tomorrow." },
+        { status: 429 },
+      );
+    }
+    await setJSON(limitKey, used + 1);
 
     const client = anthropic();
     const response = await client.messages.create({

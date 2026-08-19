@@ -56,7 +56,9 @@ export async function logConversation(
       messages: [
         {
           role: "user",
-          content: `Summarize this just-ended chat between ${personName} (age 12) and her AI companion for her parent's review. Cover the topics discussed, her mood, and anything she shared about school, friends, feelings, plans, or photos (messages starting with "[PHOTO]" describe photos she sent) — plus anything a parent would genuinely want to know. Reasonably detailed but concise: 80–150 words of plain prose. Output ONLY the summary.
+          content: `Summarize this just-ended chat between ${personName} (age 12) and her AI companion for her parent's review. Cover the topics discussed, her mood, and anything she shared about school, friends, feelings, plans, or photos (messages starting with "[PHOTO]" describe photos she sent) — plus anything a parent would genuinely want to know. Reasonably detailed but concise: 80–150 words of plain prose.
+
+After the summary, end with one final line that is exactly "ATTENTION: yes" if the chat contains something a parent would want to see promptly (safety concerns, feeling really down, being bullied, serious friend or school trouble, anything sensitive), otherwise exactly "ATTENTION: no". Output only the summary and that final line.
 
 Transcript:
 ${transcript}`,
@@ -67,12 +69,22 @@ ${transcript}`,
     const block = response.content.find((b) => b.type === "text");
     if (!block || block.type !== "text" || !block.text.trim()) return;
 
+    let summary = block.text.trim();
+    let worthAttention = false;
+    const attention = /\n?\s*ATTENTION:\s*(yes|no)\s*$/i.exec(summary);
+    if (attention) {
+      worthAttention = attention[1].toLowerCase() === "yes";
+      summary = summary.slice(0, attention.index).trim();
+    }
+    if (!summary) return;
+
     const entry: ConversationSummary = {
       id: id || `chat-${Date.now()}`,
       at: new Date().toISOString(),
       turnCount: turns.length,
-      summary: block.text.trim(),
+      summary,
       ...(parentChat ? { parentChat: true } : {}),
+      ...(worthAttention ? { worthAttention: true } : {}),
     };
     await setJSON(LOG_KEY, [entry, ...existing].slice(0, MAX_ENTRIES));
   } catch (err) {

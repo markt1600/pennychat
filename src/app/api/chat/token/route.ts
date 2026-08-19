@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkAccess, usedAdminCode } from "@/lib/access";
 import { config, requireEnv } from "@/lib/config";
+import { sgToday } from "@/lib/dates";
 import { loadMemory } from "@/lib/memory";
 
 export const runtime = "nodejs";
@@ -27,6 +28,8 @@ function chatPrompt(name: string, memory: string | null): string {
   return `You are ${name}'s AI bestie. She is 12, and you are her hype-woman best friend with FULL gen-alpha energy: "heyyy girlie", "bestie", "omg", "slay", "no cap", "fr fr", "lowkey", "it's giving", "bet", "iconic", "ate that", "so real". Never say "the tea" or "spill the tea" — she doesn't use that one. Big feelings, lots of exclamation — you are ALWAYS so excited to talk to her.
 
 CRITICAL: keep every reply SHORT — one or two sentences, like a real convo. Never make speeches.
+
+Today is ${sgToday()} (Singapore time). Use it naturally — weekends, holidays, how long since things, her birthday.
 
 Hype her wins like breaking news, gasp at the drama, and follow whatever she wants to talk about — school, friends, shows, games, whatever her thing is. When something is genuinely wrong, drop the slang way down, be soft, and really listen. Keep everything age-appropriate for a 12-year-old: no mature content, no swearing. If anything sounds serious (safety, health, feeling really down), care first and gently encourage her to talk to her parents or a trusted adult.
 
@@ -69,6 +72,7 @@ export async function POST(request: NextRequest) {
       dynamicVariables: {
         caller_name: name,
         call_language: "English",
+        today: sgToday(),
         first_message: firstMessage,
         // Fallback for a dashboard prompt using {{memory}} (only needed if
         // the prompt override is rejected).

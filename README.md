@@ -60,4 +60,12 @@ memory design) this app is built on.
   Admin-code chats work normally but **never update the memory file** —
   only access-code (Penny's) chats do. They still appear in the log,
   labeled "parent chat".
+- The parent view also offers a **weekly digest** (the last 7 days of
+  summaries rolled into one read), amber **"worth a look"** highlighting
+  on chats the summary model flags for prompt attention, and a
+  **Download everything (JSON)** export of memory + summaries.
+- Penny can set a **chat background image** (stored on her device only),
+  the agent knows **today's date in Singapore time**, photo descriptions
+  are capped at 50/day, and the app installs from the browser as a
+  home-screen PWA.
 - A Sign out link (start page and in-chat) forgets the stored code.

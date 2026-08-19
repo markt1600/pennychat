@@ -8,6 +8,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { config } from "@/lib/config";
 import { logConversation } from "@/lib/conversations";
 import { updateMemoryFromConversation } from "@/lib/memory";
+import { getJSON, setJSON } from "@/lib/store";
+
+// The memory rewrite is not idempotent — a webhook retry would fold the
+// same chat in twice. Track recently processed conversation ids.
+const PROCESSED_KEY = "memory:processedConversations";
+const PROCESSED_MAX = 50;
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -68,7 +74,16 @@ export async function POST(request: NextRequest) {
   // Parent (admin-code) chats never update the memory file — only Penny's
   // own chats are hers to remember. They're still summarized, labeled.
   const parentChat = dynVars.memory_update === "0";
-  if (!parentChat) await updateMemoryFromConversation(turns);
-  await logConversation(payload.data.conversation_id ?? "", turns, parentChat);
+  const convId = payload.data.conversation_id ?? "";
+  if (!parentChat) {
+    const processed = (await getJSON<string[]>(PROCESSED_KEY)) ?? [];
+    if (!convId || !processed.includes(convId)) {
+      await updateMemoryFromConversation(turns);
+      if (convId) {
+        await setJSON(PROCESSED_KEY, [convId, ...processed].slice(0, PROCESSED_MAX));
+      }
+    }
+  }
+  await logConversation(convId, turns, parentChat);
   return NextResponse.json({ ok: true });
 }

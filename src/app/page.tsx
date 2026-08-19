@@ -18,7 +18,6 @@ type Turn = { role: "you" | "agent"; text: string; imageUrl?: string };
 type Mode = "voice" | "text";
 
 const ACCESS_KEY = "pennyAccessCode";
-const BG_KEY = "pennyChatBackground";
 
 // Marks a user message that carries a photo description (see /api/photo).
 // The session prompt tells the agent to react to these as pictures; the
@@ -27,7 +26,7 @@ const PHOTO_TAG = "[PHOTO]";
 
 // Downscale a photo in the browser so the upload stays small (and Claude
 // vision cheap) — phone camera images are far bigger than needed.
-async function shrinkPhoto(file: File, max = 1280): Promise<string> {
+async function shrinkPhoto(file: File, max = 1280, quality = 0.8): Promise<string> {
   const bitmap = await createImageBitmap(file).catch(() => {
     throw new Error("That photo format didn't work — try a JPG or PNG.");
   });
@@ -39,7 +38,7 @@ async function shrinkPhoto(file: File, max = 1280): Promise<string> {
   if (!ctx) throw new Error("Could not read the photo.");
   ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
   bitmap.close();
-  return canvas.toDataURL("image/jpeg", 0.8);
+  return canvas.toDataURL("image/jpeg", quality);
 }
 
 export default function ChatPage() {
@@ -92,8 +91,22 @@ export default function ChatPage() {
 
   useEffect(() => {
     refreshStatus();
-    setBg(localStorage.getItem(BG_KEY));
   }, [refreshStatus]);
+
+  // The chat background lives server-side so it follows her across devices.
+  const loadBackground = useCallback(async () => {
+    try {
+      const res = await fetch("/api/background", { headers: authHeaders() });
+      const data = await res.json();
+      if (res.ok) setBg(data.background ?? null);
+    } catch {
+      /* transient */
+    }
+  }, [authHeaders]);
+
+  useEffect(() => {
+    if (unlocked) loadBackground();
+  }, [unlocked, loadBackground]);
 
   const loadMemory = useCallback(async () => {
     try {
@@ -299,27 +312,28 @@ export default function ChatPage() {
     setShowMemory(false);
   }
 
-  // Penny can pick a chat background — stored on this device only, so it
-  // personalizes without touching anyone's config.
+  // Penny can pick a chat background — saved server-side once, shown on
+  // every device she signs in from.
   async function pickBackground(file: File) {
     setError(null);
     try {
-      const dataUrl = await shrinkPhoto(file, 1600);
-      localStorage.setItem(BG_KEY, dataUrl);
+      const dataUrl = await shrinkPhoto(file, 1280, 0.75);
+      const res = await fetch("/api/background", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ image: dataUrl }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not save the background");
       setBg(dataUrl);
     } catch (e) {
-      setError(
-        e instanceof Error && /quota/i.test(String(e))
-          ? "That image is too big to save — try a smaller one."
-          : e instanceof Error
-            ? e.message
-            : String(e),
-      );
+      setError(e instanceof Error ? e.message : String(e));
     }
   }
 
-  function removeBackground() {
-    localStorage.removeItem(BG_KEY);
+  async function removeBackground() {
+    setError(null);
+    await fetch("/api/background", { method: "DELETE", headers: authHeaders() }).catch(() => {});
     setBg(null);
   }
 
@@ -394,6 +408,7 @@ export default function ChatPage() {
     setShowMemory(false);
     setShowLog(false);
     setEditingMemory(false);
+    setBg(null);
     setStatus((s) => (s ? { ...s, admin: false } : s));
   }
 

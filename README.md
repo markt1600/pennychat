@@ -64,7 +64,8 @@ memory design) this app is built on.
   summaries rolled into one read), amber **"worth a look"** highlighting
   on chats the summary model flags for prompt attention, and a
   **Download everything (JSON)** export of memory + summaries.
-- Penny can set a **chat background image** (stored on her device only),
+- Penny can set a **chat background image** (uploaded once, stored in KV,
+  shown on any device she signs in from — removable the same way),
   the agent knows **today's date in Singapore time**, photo descriptions
   are capped at 50/day, and the app installs from the browser as a
   home-screen PWA.
